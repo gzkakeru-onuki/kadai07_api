@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css">
+    <title>雑談ニキ</title>
+    <script type="importmap">
+        {
+          "imports": {
+            "@google/generative-ai": "https://esm.run/@google/generative-ai"
+          }
+        }
+    </script>
+</head>
+
+<body>
+
+    <header>
+        <img src="img/雑談.jpg" class="header-img" alt="ヘッダーロゴ">
+        <h1>ZATSUDAN NIKI.</h1>
+    </header>
+
+    <div id="chat-container">
+        <div id="message">
+            <div class="ai-message">こんにちは！僕は雑談たぬき！話し方や、性別、一人称まで自在に決めて<br>
+                自由に雑談してね！</div>
+        </div>
+        <label for="textcontainer">
+            <input name="textcontainer" type="text" id="textcontainer"><button type="button" id="sendButton">送信</button>
+        </label>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getDatabase, ref, push, set, get, query, orderByChild, onChildAdded, remove, onChildRemoved } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js'
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyC_mBpqTOdQvh9v9NbEiaFriWAc2oEpYNw",
+            authDomain: "chatniki.firebaseapp.com",
+            databaseURL: "https://chatniki-default-rtdb.firebaseio.com",
+            projectId: "chatniki",
+            storageBucket: "chatniki.firebasestorage.app",
+            messagingSenderId: "744392928982",
+            appId: "1:744392928982:web:dd68ed7c377cc04b0d6377"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app); // RealtimeDatabase使う
+        const userId = localStorage.getItem("userId");
+
+
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+        //initialize GeminiAI API
+        import{API_KEY} from "./js/modules.js";
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const chat = model.startChat({
+            history: [],
+            generationConfig: {
+                maxOutputTokens: 50,
+            },
+        });
+
+
+        $(document).ready(function () {
+            $("#message").empty();
+            loadChatHistory(userId);
+        });
+
+        // メッセージ送信ボタンのイベントハンドラ
+        $("#sendButton").on("click", async function () {
+            const userMessage = $("#textcontainer").val();
+            if (!userMessage) return;
+
+            //ユーザメッセージを表示して保存
+            displayMessage(userMessage, true);
+            saveChatMessage(userId, userMessage, "user");
+
+            $("#textcontainer").val(""); // 入力フィールドをクリア
+
+
+            // AIにメッセージを送信
+            const result = await chat.sendMessage(userMessage);
+            const response = await result.response;
+            const aiMessage = await response.text();
+
+            // AIの応答を表示して保存
+            displayMessage(aiMessage, false);
+            saveChatMessage(userId, aiMessage, "GeminiAI");
+
+            // VOICEVOX APIエンドポイントの設定
+            const speakerId = 42; // おじいちゃん
+            const audioQueryUrl = `http://localhost:50021/audio_query?text=${encodeURIComponent(aiMessage)}&speaker=${speakerId}`;
+            const synthesisUrl = `http://localhost:50021/synthesis?speaker=${speakerId}`;
+
+            // audio_query APIを使って音声合成の準備
+            $.post(audioQueryUrl, function (queryData) {
+                // synthesis APIを使って音声データを生成
+                $.ajax({
+                    url: synthesisUrl,
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(queryData),
+                    speed:1.5,
+                    xhrFields: {
+                        responseType: 'blob' // Blob形式でレスポンスを受け取る
+                    },
+                    success: function (audioBlob) {
+                        // 音声を再生
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        const audio = new Audio(audioUrl);
+                        audio.play();
+                    },
+                    error: function (error) {
+                        console.error("エラーが発生しました:", error);
+                        alert("音声合成に失敗しました。VOICEVOXエンジンが起動しているか確認してください。");
+                    }
+                });
+            }).fail(function (error) {
+                console.error("エラーが発生しました:", error);
+                alert("音声合成クエリの生成に失敗しました。");
+            });
+
+
+
+        });
+
+
+        //取得したメッセージを表示する。
+        function displayMessage(text, isUser) {
+            const className = isUser ? "user-message" : "ai-message";
+            $("#message").append(`<div class="${className}">${text}</div>`);
+        }
+
+        //会話履歴保存
+        function saveChatMessage(userId, message, sender) {
+            const dbRef = ref(db, `chatHistory/${userId}`); // RealtimeDatabase”chatHistory“を使う
+            const newMessageRef = push(dbRef);//uniqueKey
+            set(newMessageRef, {
+                message: message,
+                sender: sender,//user か　modelとして指定
+                timestamp: Date.now()
+            });
+        };
+
+        // 初回のみ会話履歴を取得する
+        async function loadChatHistory(userId) {
+            //queryメソッドでデータをフィルタリングする。条件としてorderByChildでtimestampを基準にして取得する。
+            const dbRef = query(ref(db, `chatHistory/${userId}`), orderByChild("timestamp"));
+            const snapShot = await get(dbRef);
+            if (snapShot.exists()) {
+                snapShot.forEach((snap) => {
+                    const messageData = snap.val();
+                    const isUser = messageData.sender === "user";
+                    displayMessage(messageData.message, isUser);
+                });
+            }
+        }
+
+    </script>
+</body>
+
+</html>

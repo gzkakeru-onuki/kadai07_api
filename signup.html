@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/signup.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.slim.js"></script>
+    <title>ログイン</title>
+</head>
+
+<body>
+
+    <header>
+        <img src="img/雑談.jpg" class="header-img" alt="ヘッダーロゴ">
+        <h1>雑談タニキへようこそ！</h1>
+
+    </header>
+    <div class="login-form">
+        <div class="login-img">
+            <img class="racoon" src="img/サインインたぬき.png" alt="サインインたぬき">
+        </div>
+
+        <h1 class="login-title">サインアップたぬきしてもいいじゃない...</h1>
+        <p class="login-title">たぬきだもの。</p>
+        <form method="POST">
+            <table>
+                <tr class="row">
+                    <th>メールアドレス:</th>
+                    <td><input type="text" id="mail" name="mail" placeholder="tanuki@zatudan.com"></td>
+                </tr>
+                <tr class="row">
+                    <th>パスワード:</th>
+                    <td><input type="password" id="password" name="password" placeholder="tanutanutanuki"></td>
+                </tr>
+            </table>
+            <div class="sendButton">
+                <button id="create" type="button">サインアップする！</button>
+            </div>
+            <div class="sendButton">
+                <button id="login" type="button">アカウントがある方はこちら</button>
+            </div>
+        </form>
+    </div>
+    <div class="footer">
+        <h3>©︎ZatudanNiki.</h3>
+    </div>
+
+
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getDatabase, ref, push, set, onChildAdded, remove, onChildRemoved } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js'
+
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        import { firebaseconfig } from "./js/modules.js";
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app); // RealtimeDatabase使う
+
+        //アカウント作成
+        $("#create").on("click", function () {
+            const auth = getAuth();//Authを起動
+            const mail = $("#mail").val();
+            const password = $("#password").val();
+
+            //サインインして、ユーザIDを取得してチャット履歴をロードするようにする。
+            createUserWithEmailAndPassword(auth, mail, password).then((userCredential) => {
+                alert("サインアップしたぬき。");
+                const userId = userCredential.userId.uid;
+                localStorage.setItem("userId", userId);
+                location.href = "index.html";
+            })
+                .catch((error) => {
+                    console.log("エラー内容：", error);
+                });
+        });
+    </script>
+    <script>
+        $("#login").on("click", function () {
+            location.href = "login.html";
+        })
+    </script>
+</body>
+
+</html>
